@@ -1,0 +1,73 @@
+#!/bin/bash
+# Runs inside the image rootfs (chroot) after packages and mkosi.build artifacts are installed.
+set -euo pipefail
+
+BASIC_UID=1000
+BASIC_GID=1000
+
+cat > /usr/local/bin/trs-ai-basic <<'EOF'
+#!/bin/bash
+export PYTHONUNBUFFERED=1
+cd /home/basic
+exec /usr/bin/python3 /opt/trs-ai/mbasic/mbasic --ui cli
+EOF
+chmod 0755 /usr/local/bin/trs-ai-basic
+
+mkdir -p /etc/login.defs.d
+printf '%s\n' 'CREATE_MAIL_SPOOL no' > /etc/login.defs.d/99-trs-ai-appliance.conf
+
+if ! getent group basic >/dev/null; then
+    groupadd -g "$BASIC_GID" basic
+fi
+
+if ! getent passwd basic >/dev/null; then
+    useradd -m -u "$BASIC_UID" -g "$BASIC_GID" -s /bin/bash basic
+else
+    mkdir -p /home/basic
+fi
+
+# MBASIC needs to create ~/.mbasic (settings) and ~/.mbasic_history; that requires a writable
+# home directory owned by basic. A root-owned /home/basic with mode 755 is a common footgun
+# (PermissionError on LIST). tmpfiles fixes ownership on every boot and during image finalize.
+cat > /usr/lib/tmpfiles.d/trs-ai-appliance.conf <<EOF
+d /home/basic        0755 basic basic -
+d /home/basic/.mbasic 0755 basic basic -
+EOF
+
+install -d -m 0755 /etc/systemd/system/getty@tty1.service.d
+cat > /etc/systemd/system/getty@tty1.service.d/autologin.conf <<'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin basic --noclear %I $TERM
+EOF
+
+install -d -m 0755 /etc/systemd/system/serial-getty@.service.d
+cat > /etc/systemd/system/serial-getty@.service.d/autologin.conf <<'EOF'
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin basic --keep-baud 115200,38400,9600 %I $TERM
+EOF
+
+cat > /home/basic/.bash_profile <<'EOF'
+# Milestone 1: drop into MBASIC on the console users actually see.
+# - tty*: virtual VGA text consoles
+# - ttyS*: classic serial
+# - hvc*: virtio console (mkosi/QEMU -nographic attaches here, not tty1)
+case "$(tty)" in
+    /dev/tty[0-9]*|/dev/ttyS*|/dev/hvc[0-9]*)
+        exec /usr/local/bin/trs-ai-basic
+        ;;
+esac
+EOF
+
+chmod 0755 /home/basic
+chmod 0644 /home/basic/.bash_profile
+# Best-effort: fix root-owned home from the useradd "else" branch (mkosi chroot may reject chown).
+chown -R "$BASIC_UID:$BASIC_GID" /home/basic 2>/dev/null || true
+
+if [[ -f /usr/lib/os-release ]]; then
+    sed -i \
+        -e 's/^NAME=.*/NAME="TRS-AI BASIC Appliance"/' \
+        -e 's/^PRETTY_NAME=.*/PRETTY_NAME="TRS-AI BASIC Appliance (Milestone 1)"/' \
+        /usr/lib/os-release || true
+fi

@@ -1,0 +1,18 @@
+TRS-AI (bootable BASIC appliance integration)
+Copyright (c) 2026 Charles Benedict Jr
+
+This repository ships mkosi recipes, shell/Python tooling, and documentation
+that build a Fedora guest image containing MBASIC.
+
+The interpreter and compiler sources live in the mbasic/ directory, which is
+a git submodule:
+
+  https://github.com/chuckb/mbasic
+
+That project is a fork of:
+
+  https://github.com/avwohl/mbasic
+
+MBASIC is licensed under the GNU General Public License v3.0; see mbasic/LICENSE
+and the LICENSE file at this repository root. When you distribute a disk image
+built from this tree, GPL obligations apply to the combined work.

@@ -1,0 +1,12 @@
+#!/bin/bash
+# Copy MBASIC tree into the image ($DESTDIR is merged into the rootfs).
+set -euo pipefail
+
+if [[ ! -d "$SRCDIR/mbasic" ]]; then
+    echo "mkosi.build: expected MBASIC sources at \$SRCDIR/mbasic (check BuildSources=)." >&2
+    exit 1
+fi
+
+mkdir -p "$DESTDIR/opt/trs-ai"
+cp -a "$SRCDIR/mbasic" "$DESTDIR/opt/trs-ai/mbasic"
+chmod +x "$DESTDIR/opt/trs-ai/mbasic/mbasic" || true

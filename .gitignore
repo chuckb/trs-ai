@@ -1,0 +1,8 @@
+# Local Python
+.venv/
+__pycache__/
+*.pyc
+
+# Editor / OS
+*.swp
+.DS_Store

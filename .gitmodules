@@ -1,0 +1,4 @@
+[submodule "mbasic"]
+	path = mbasic
+	url = https://github.com/chuckb/mbasic.git
+	branch = main
