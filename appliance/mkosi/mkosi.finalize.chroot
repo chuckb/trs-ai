@@ -1,0 +1,20 @@
+#!/bin/bash
+# Runs last in the image pipeline (after tmpfiles, SELinux relabel, etc.).
+# Re-apply mode: unprivileged builds cannot use chown on this file; 0644 lets `basic` read as "other".
+set -euo pipefail
+
+# Fedora preset-all disables networkd. The socket must be in sockets.target.wants or the service stays dead
+# (evidence: networkd.service inactive, TriggeredBy socket inactive; resolved up but enp0s1 has no DNS scope).
+export SYSTEMD_OFFLINE=1
+systemctl enable systemd-networkd.socket systemd-networkd.service systemd-resolved.service
+
+ST="/etc/systemd/system"
+mkdir -p "$ST/sockets.target.wants" "$ST/multi-user.target.wants" "$ST/sysinit.target.wants"
+ln -sf /usr/lib/systemd/system/systemd-networkd.socket "$ST/sockets.target.wants/systemd-networkd.socket"
+ln -sf /usr/lib/systemd/system/systemd-networkd.service "$ST/multi-user.target.wants/systemd-networkd.service"
+ln -sf /usr/lib/systemd/system/systemd-network-generator.service "$ST/sysinit.target.wants/systemd-network-generator.service"
+ln -sf /usr/lib/systemd/system/systemd-resolved.service "$ST/sysinit.target.wants/systemd-resolved.service"
+
+if [[ -f /etc/trs-ai/ai.env ]]; then
+  chmod 0644 /etc/trs-ai/ai.env
+fi

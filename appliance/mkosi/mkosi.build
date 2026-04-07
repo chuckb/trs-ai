@@ -10,3 +10,21 @@ fi
 mkdir -p "$DESTDIR/opt/trs-ai"
 cp -a "$SRCDIR/mbasic" "$DESTDIR/opt/trs-ai/mbasic"
 chmod +x "$DESTDIR/opt/trs-ai/mbasic/mbasic" || true
+
+mkdir -p "$DESTDIR/etc/trs-ai"
+# /etc/resolv.conf is owned by the systemd-resolved RPM (stub symlink). Do not ship one from DESTDIR or
+# mkosi's merge hits "cp: not writing through dangling symlink …/etc/resolv.conf".
+# Prefer secrets staged by build-image.sh under BuildSources (mkosi often does not pass
+# arbitrary host env vars like TRS_AI_BUILD_AI_ENV into this script).
+_AI_ENV_SRC=""
+if [[ -f "$SRCDIR/trs-ai-secrets/ai.env" ]]; then
+  _AI_ENV_SRC="$SRCDIR/trs-ai-secrets/ai.env"
+elif [[ -n "${TRS_AI_BUILD_AI_ENV:-}" && -f "$TRS_AI_BUILD_AI_ENV" ]]; then
+  _AI_ENV_SRC="$TRS_AI_BUILD_AI_ENV"
+fi
+if [[ -n "$_AI_ENV_SRC" ]]; then
+  # 0644: unprivileged mkosi cannot chown to group basic later; console user must read as "other".
+  install -m 0644 -T "$_AI_ENV_SRC" "$DESTDIR/etc/trs-ai/ai.env"
+else
+  install -m 0644 "$SRCDIR/trs-ai-assets/default-ai.env" "$DESTDIR/etc/trs-ai/ai.env"
+fi

@@ -5,9 +5,100 @@ set -euo pipefail
 BASIC_UID=1000
 BASIC_GID=1000
 
+mkdir -p /usr/local/libexec
+cat > /usr/local/libexec/trs-ai-preflight.sh <<'EOP'
+#!/bin/bash
+# Short status before MBASIC: IPv4 default route + TLS reachability to AI API host (remote only).
+set +e
+
+msg() { echo "TRS-AI: $*"; }
+
+NET_OK=
+for _ in $(seq 1 25); do
+  if ip -4 route show default 2>/dev/null | grep -q .; then
+    msg "network OK (default IPv4 route)"
+    NET_OK=1
+    break
+  fi
+  sleep 1
+done
+[[ -n "$NET_OK" ]] || msg "network: no default route yet — AILOAD may fail until DHCP finishes"
+
+be="${TRS_AI_BACKEND:-fixture}"
+be_lc=$(printf '%s' "$be" | tr '[:upper:]' '[:lower:]')
+if [[ "$be_lc" != "remote" ]]; then
+  msg "AILOAD: backend is ${be:-fixture} (skipping cloud check)"
+  echo ""
+  exit 0
+fi
+
+if [[ -z "$NET_OK" ]]; then
+  msg "cloud: skipped (no route)"
+  echo ""
+  exit 0
+fi
+
+# TLS (or TCP for http) to host:port from TRS_AI_BASE_URL — same stack as mbasic (stdlib ssl).
+out=$(
+  python3 <<'PY' 2>&1
+import os
+import socket
+import ssl
+import sys
+import urllib.parse
+
+base = (os.environ.get("TRS_AI_BASE_URL") or "https://api.openai.com/v1/chat/completions").strip()
+p = urllib.parse.urlparse(base)
+host = p.hostname or "api.openai.com"
+port = p.port or (443 if (p.scheme or "https") != "http" else 80)
+use_tls = (p.scheme or "https") != "http"
+timeout = 10.0
+
+try:
+    raw = socket.create_connection((host, port), timeout=timeout)
+except OSError as e:
+    print(e, file=sys.stderr, flush=True)
+    raise SystemExit(1)
+
+try:
+    if use_tls:
+        ctx = ssl.create_default_context()
+        with ctx.wrap_socket(raw, server_hostname=host):
+            pass
+    else:
+        raw.close()
+    print(f"{host}:{port}", flush=True)
+except Exception as e:
+    try:
+        raw.close()
+    except OSError:
+        pass
+    print(e, file=sys.stderr, flush=True)
+    raise SystemExit(1)
+PY
+)
+py=$?
+out=${out//$'\n'/}
+if [[ "$py" -eq 0 && -n "$out" ]]; then
+  msg "cloud OK (reached $out)"
+else
+  msg "cloud: cannot reach API — $out (check TRS_AI_BASE_URL / DNS / HTTPS)"
+fi
+
+echo ""
+EOP
+chmod 0755 /usr/local/libexec/trs-ai-preflight.sh
+
 cat > /usr/local/bin/trs-ai-basic <<'EOF'
 #!/bin/bash
 export PYTHONUNBUFFERED=1
+set -a
+if [[ -r /etc/trs-ai/ai.env ]]; then
+  # shellcheck source=/dev/null
+  . /etc/trs-ai/ai.env
+fi
+set +a
+/usr/local/libexec/trs-ai-preflight.sh
 cd /home/basic
 exec /usr/bin/python3 /opt/trs-ai/mbasic/mbasic --ui cli
 EOF
@@ -65,9 +156,42 @@ chmod 0644 /home/basic/.bash_profile
 # Best-effort: fix root-owned home from the useradd "else" branch (mkosi chroot may reject chown).
 chown -R "$BASIC_UID:$BASIC_GID" /home/basic 2>/dev/null || true
 
+if [[ -f /etc/trs-ai/ai.env ]]; then
+  # Unprivileged mkosi cannot chown to another uid/gid in the build namespace (EINVAL).
+  # World-readable so autologin user `basic` can source this file; tighten only in root-built images if needed.
+  chmod 0644 /etc/trs-ai/ai.env
+fi
+
+# Minimal image had no DHCP/DNS stack → Python AILOAD fails with errno -3 (name resolution).
+mkdir -p /etc/systemd/network
+cat > /etc/systemd/network/10-ethernet.network <<'EOF'
+[Match]
+Type=ether
+
+[Network]
+# IPv4 only: QEMU user/slirp is more reliable than DHCPv6 here.
+DHCP=ipv4
+EOF
+
+mkdir -p /usr/lib/systemd/system-preset
+cat > /usr/lib/systemd/system-preset/99-trs-ai-appliance.preset <<'EOF'
+enable systemd-networkd.service
+enable systemd-resolved.service
+EOF
+
+# preset-all (after this script) disables systemd-networkd; enable symlinks are removed. Pull socket+service
+# into multi-user anyway — systemd starts "disabled" units when Wanted by another unit (systemd.unit(5)).
+install -d -m 0755 /etc/systemd/system/multi-user.target.d
+cat > /etc/systemd/system/multi-user.target.d/10-trs-ai-networkd.conf <<'EOF'
+[Unit]
+Wants=systemd-networkd.socket systemd-networkd.service
+EOF
+
+# Do not rm/ln /etc/resolv.conf here: mkosi often bind-mounts the host file into this chroot (EBUSY).
+
 if [[ -f /usr/lib/os-release ]]; then
     sed -i \
         -e 's/^NAME=.*/NAME="TRS-AI BASIC Appliance"/' \
-        -e 's/^PRETTY_NAME=.*/PRETTY_NAME="TRS-AI BASIC Appliance (Milestone 1)"/' \
+        -e 's/^PRETTY_NAME=.*/PRETTY_NAME="TRS-AI BASIC Appliance (Milestone 2)"/' \
         /usr/lib/os-release || true
 fi

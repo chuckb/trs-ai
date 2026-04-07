@@ -6,3 +6,9 @@ __pycache__/
 # Editor / OS
 *.swp
 .DS_Store
+
+# Appliance: inject API keys at image build (see docs/architecture_milestone2_aiload.md)
+appliance/secrets/
+appliance/mkosi/build-secrets/ai.env
+
+.cursor/

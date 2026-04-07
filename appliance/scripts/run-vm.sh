@@ -14,9 +14,11 @@ if [[ ! -f "$STAGE/output/trs-ai-basic-m1.raw" ]]; then
     exit 1
 fi
 
+# mkosi vm adds QEMU user networking (-nic user,virtio) when RuntimeNetwork=user (also the default).
 exec mkosi \
     --directory "$MKOSI_DIR" \
     --workspace-directory "$STAGE/workspace" \
     --cache-directory "$STAGE/cache" \
     --output-directory "$STAGE/output" \
+    --runtime-network=user \
     vm

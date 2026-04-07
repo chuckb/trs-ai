@@ -69,6 +69,7 @@ Host orchestration (dependency check + mkosi CLI flags):
 | [`appliance/scripts/run-vm.sh`](../appliance/scripts/run-vm.sh) | `mkosi vm` with the same staging paths as the build |
 | [`appliance/scripts/smoke-appliance-vm.sh`](../appliance/scripts/smoke-appliance-vm.sh) | **Automated Milestone 1 test**: boots `mkosi vm`, drives MBASIC (`LIST` / `SAVE` / `NEW` / `LOAD` / `RUN`), then kills the VM |
 | [`appliance/scripts/smoke-appliance-vm.py`](../appliance/scripts/smoke-appliance-vm.py) | Python + **pexpect** implementation (same staging env vars as the other scripts) |
+| [`appliance/scripts/smoke-appliance-vm-m2.sh`](../appliance/scripts/smoke-appliance-vm-m2.sh) | **Milestone 2**: `AILOAD` + `RUN` (fixture backend); optional **`TRS_AI_PYTHON`** for interpreter |
 
 **Automated appliance test:** install **`python3-pexpect`** (`sudo dnf install python3-pexpect`), build the image, then run **`./appliance/scripts/smoke-appliance-vm.sh`** (optional **`-v`** for full console capture). Default boot wait is **300s**; use **`--boot-timeout 600`** on slow hosts or without KVM. CI jobs need **`/dev/kvm`** for reasonable speed, or a much larger timeout if QEMU falls back to TCG.
 
@@ -85,13 +86,21 @@ That is a **machine-wide** choice—only do it if you accept the tradeoff on tha
 export TRS_AI_MKOSI_STAGEDIR=/var/tmp/my-xattr-capable-staging
 ```
 
-**Python on the host (optional):** for MBASIC development outside the guest, this project often uses a dedicated environment:
+**Python on the host (local pytest / MBASIC dev only):** use a **virtual environment on your machine** so dev dependencies (pytest, pexpect, etc.) are isolated. **There is no canonical venv path** in the repo—create one wherever you prefer, for example:
 
 ```bash
-source ~/pyenvs/trs-ai/bin/activate
+python3 -m venv ~/.local/venvs/trs-ai-dev   # or mbasic/.venv, ~/pyenvs/trs-ai, etc.
+source ~/.local/venvs/trs-ai-dev/bin/activate
+cd mbasic
+pip install -e ".[dev]"
+python -m pytest …
 ```
 
-The **guest** image uses only **`python3` from Fedora** to run MBASIC; it does not use your pyenv.
+CI and other maintainers only need an environment where `mbasic` is installed **editable** with the **`[dev]`** extra; how that venv is created and where it lives is configurable.
+
+**Guest (appliance image):** MBASIC is started with **`/usr/bin/python3`** from Fedora packages. The image does **not** install or use `venv`, `pip`, or a project-specific virtual environment—the appliance is meant to “just work” without that layer. See [`mkosi.postinst.chroot`](../appliance/mkosi/mkosi.postinst.chroot) (`exec /usr/bin/python3 /opt/trs-ai/mbasic/mbasic …`).
+
+Documented again in the root [README.md](../README.md) under **Host Python (development and tests only)**.
 
 **Typical workflow**
 
