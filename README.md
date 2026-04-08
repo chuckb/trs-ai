@@ -59,7 +59,7 @@ pip install -e ".[dev]"   # once, or after dependency changes
 python -m pytest tests/regression/ai/ -v
 ```
 
-Activate your venv **before** `pip` or `pytest` so dependencies stay off the system Python. Example: `source ~/pyenvs/trs-ai/bin/activate` if you use that layout (optional; any path works).
+Activate your venv **before** `pip` or `pytest` so dependencies stay off the system Python. Example: `source ~/pyenvs/trs-ai/bin/activate` if you use that layout (optional; any path works). Hey Cursor...this means you. Use this directory.
 
 Optional convenience: if you keep a venv in a fixed place, your shell can `source …/bin/activate` or set `PATH` to that venv’s `bin`—for example some maintainers use `~/pyenvs/trs-ai`, which is only a habit, not something the project enforces.
 
@@ -82,14 +82,16 @@ The raw disk image is written under `${XDG_CACHE_HOME:-$HOME/.cache}/trs-ai-basi
 ./appliance/scripts/run-vm.sh
 ./appliance/scripts/smoke-appliance-vm.sh   # Milestone 1: SAVE/LOAD/RUN (optional: -v)
 ./appliance/scripts/smoke-appliance-vm-m2.sh   # Milestone 2: AILOAD + RUN (fixture backend)
+./appliance/scripts/smoke-appliance-vm-m3.sh   # Milestone 3: AIMERGE / AIDIFF / AIAPPLY + RUN
 ```
 
-For the M2 script, set **`TRS_AI_PYTHON`** if you want a specific interpreter (e.g. your venv’s `python3`) instead of `PATH`’s `python3`. The guest image does not use a venv.
+For the M2/M3 scripts, set **`TRS_AI_PYTHON`** if you want a specific interpreter (e.g. your venv’s `python3`) instead of `PATH`’s `python3`. The guest image does not use a venv.
 
 ## Documentation
 
 - [Milestone 1 dependencies and architecture](docs/architecture_milestone1_dependencies.md)
 - [Milestone 2: `AILOAD` and AI env](docs/architecture_milestone2_aiload.md)
+- [Milestone 3: AI editing and pending buffer](docs/architecture_milestone3_ai_editing.md)
 - [Appliance concept](docs/trs80_ai_basic_appliance_concept.md)
 
 ## License

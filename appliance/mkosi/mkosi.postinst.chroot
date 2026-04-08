@@ -192,6 +192,6 @@ EOF
 if [[ -f /usr/lib/os-release ]]; then
     sed -i \
         -e 's/^NAME=.*/NAME="TRS-AI BASIC Appliance"/' \
-        -e 's/^PRETTY_NAME=.*/PRETTY_NAME="TRS-AI BASIC Appliance (Milestone 2)"/' \
+        -e 's/^PRETTY_NAME=.*/PRETTY_NAME="TRS-AI BASIC Appliance (Milestone 3)"/' \
         /usr/lib/os-release || true
 fi
