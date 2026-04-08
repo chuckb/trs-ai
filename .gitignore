@@ -11,4 +11,5 @@ __pycache__/
 appliance/secrets/
 appliance/mkosi/build-secrets/ai.env
 
-.cursor/
+.cursor/*.log
+.cursor/**/*.log

@@ -1,0 +1,21 @@
+---
+description: Host Python venv for MBASIC dev/tests — always activate before pip/pytest
+alwaysApply: true
+---
+
+# Host Python (TRS-AI / MBASIC)
+
+For **any** workstation command that uses `pip`, `pytest`, or editable MBASIC installs for this repo:
+
+1. **Activate the project venv first** (do not install into system `/usr/bin/python`):
+   ```bash
+   source ~/pyenvs/trs-ai/bin/activate
+   ```
+2. **MBASIC work** happens under `mbasic/`:
+   ```bash
+   cd mbasic
+   python -m pytest …
+   ```
+3. If the venv path ever differs, follow [README.md](../../README.md) (“Host Python”); default habit documented there is `~/pyenvs/trs-ai`.
+
+The bootable appliance does not use this venv; this rule is for **host** development only.
