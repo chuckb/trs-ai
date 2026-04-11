@@ -5,6 +5,8 @@ Milestone 2 appliance smoke test: boot image, exercise AILOAD (fixture backend) 
 Requires: built image (build-image.sh), mkosi, pexpect. Guest must have
 /etc/trs-ai/ai.env with TRS_AI_BACKEND=fixture (default image build).
 
+Use --arch aarch64 or -a for the AArch64 image (same staging as build-image.sh --arch aarch64).
+
 Does not modify or replace smoke-appliance-vm.py (Milestone 1).
 """
 from __future__ import annotations
@@ -16,32 +18,11 @@ import sys
 import time
 from pathlib import Path
 
+import appliance_image_paths as img
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parent.parent.parent
-
-
-def _stage() -> Path:
-    base = os.environ.get("TRS_AI_MKOSI_STAGEDIR")
-    if base:
-        return Path(base)
-    xdg = os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))
-    return Path(xdg) / "trs-ai-basic"
-
-
-def _mkosi_cmd(mkosi_dir: Path, stage: Path) -> list[str]:
-    return [
-        "mkosi",
-        "--directory",
-        str(mkosi_dir),
-        "--workspace-directory",
-        str(stage / "workspace"),
-        "--cache-directory",
-        str(stage / "cache"),
-        "--output-directory",
-        str(stage / "output"),
-        "vm",
-    ]
 
 
 def main() -> int:
@@ -74,25 +55,58 @@ def main() -> int:
         action="store_true",
         help="Log guest console to stdout",
     )
+    arch_group = parser.add_mutually_exclusive_group()
+    arch_group.add_argument(
+        "--arch",
+        choices=("x86_64", "aarch64", "arm64"),
+        default="x86_64",
+        help="Appliance architecture (default: x86_64)",
+    )
+    arch_group.add_argument(
+        "-a",
+        "--aarch64",
+        action="store_const",
+        const="aarch64",
+        dest="arch",
+        help="Same as --arch aarch64",
+    )
     args = parser.parse_args()
+
+    try:
+        arch = img.normalize_arch(args.arch)
+    except ValueError as e:
+        print(f"smoke-appliance-vm-m2: {e}", file=sys.stderr)
+        return 2
 
     if not shutil.which("mkosi"):
         print("smoke-appliance-vm-m2: mkosi not in PATH", file=sys.stderr)
         return 127
+    if arch == "aarch64" and not shutil.which("qemu-system-aarch64"):
+        print(
+            "smoke-appliance-vm-m2: qemu-system-aarch64 not in PATH "
+            "(dnf install qemu-system-aarch64)",
+            file=sys.stderr,
+        )
+        return 127
 
     root = _repo_root()
     mkosi_dir = root / "appliance" / "mkosi"
-    stage = _stage()
-    raw = stage / "output" / "trs-ai-basic-m1.raw"
+    stage = img.default_stage_dir(arch)
+    raw = stage / "output" / img.raw_image_filename(arch)
     if not raw.is_file():
+        hint = (
+            "./appliance/scripts/build-image.sh --arch aarch64"
+            if arch == "aarch64"
+            else "./appliance/scripts/build-image.sh"
+        )
         print(
-            f"smoke-appliance-vm-m2: missing image {raw} — run build-image.sh first.",
+            f"smoke-appliance-vm-m2: missing image {raw} — run {hint} from repo root.",
             file=sys.stderr,
         )
         return 2
 
-    cmd = _mkosi_cmd(mkosi_dir, stage)
-    print("smoke-appliance-vm-m2: spawning:", " ".join(cmd), flush=True)
+    cmd = img.mkosi_vm_command(mkosi_dir, stage, arch)
+    print(f"smoke-appliance-vm-m2: arch={arch} spawning:", " ".join(cmd), flush=True)
 
     child = pexpect.spawn(
         cmd[0],

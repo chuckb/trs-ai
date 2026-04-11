@@ -1,0 +1,109 @@
+#!/bin/bash -e
+# Host-side pi-gen stage: install TRS-AI into ROOTFS_DIR.
+# Placeholders replaced by build-pi-os-image.sh: @TRS_AI_ROOT@ @FIRST_USER_NAME@
+# TRS-AI helper scripts live under ${BASE_DIR}/.trs-ai-overlay-files (copied before build / Docker image).
+
+TRS_AI_ROOT="@TRS_AI_ROOT@"
+FIRST_USER_NAME="@FIRST_USER_NAME@"
+TRS_AI_FILES="${BASE_DIR}/.trs-ai-overlay-files"
+
+if [[ -f "${BASE_DIR}/.trs-ai-build-env" ]]; then
+	# shellcheck source=/dev/null
+	source "${BASE_DIR}/.trs-ai-build-env"
+fi
+
+if [[ ! -d "${TRS_AI_ROOT}/mbasic" ]]; then
+	echo "trs-ai: missing mbasic at ${TRS_AI_ROOT}/mbasic (git submodule?)" >&2
+	exit 1
+fi
+
+mkdir -p "${ROOTFS_DIR}/opt/trs-ai"
+rsync -a --delete "${TRS_AI_ROOT}/mbasic/" "${ROOTFS_DIR}/opt/trs-ai/mbasic/"
+chmod +x "${ROOTFS_DIR}/opt/trs-ai/mbasic/mbasic" 2>/dev/null || true
+
+install -d -m 0755 "${ROOTFS_DIR}/usr/local/libexec"
+install -m 0755 "${TRS_AI_FILES}/trs-ai-preflight.sh" "${ROOTFS_DIR}/usr/local/libexec/trs-ai-preflight.sh"
+install -m 0755 "${TRS_AI_FILES}/trs-ai-basic" "${ROOTFS_DIR}/usr/local/bin/trs-ai-basic"
+
+mkdir -p "${ROOTFS_DIR}/etc/trs-ai"
+_AI_SRC=""
+if [[ -n "${TRS_AI_BUILD_AI_ENV:-}" && -f "${TRS_AI_BUILD_AI_ENV}" ]]; then
+	_AI_SRC="${TRS_AI_BUILD_AI_ENV}"
+elif [[ -f "${TRS_AI_ROOT}/appliance/secrets/ai.env" ]]; then
+	_AI_SRC="${TRS_AI_ROOT}/appliance/secrets/ai.env"
+fi
+if [[ -n "${_AI_SRC}" ]]; then
+	install -m 0644 "${_AI_SRC}" "${ROOTFS_DIR}/etc/trs-ai/ai.env"
+else
+	install -m 0644 "${TRS_AI_ROOT}/appliance/mkosi/build-assets/default-ai.env" "${ROOTFS_DIR}/etc/trs-ai/ai.env"
+fi
+
+install -d -m 0755 "${ROOTFS_DIR}/etc/login.defs.d"
+printf '%s\n' 'CREATE_MAIL_SPOOL no' > "${ROOTFS_DIR}/etc/login.defs.d/99-trs-ai-appliance.conf"
+
+# HDMI / local console autologin (tty1); optional virtio serial for QEMU if present.
+install -d -m 0755 "${ROOTFS_DIR}/etc/systemd/system/getty@tty1.service.d"
+cat > "${ROOTFS_DIR}/etc/systemd/system/getty@tty1.service.d/autologin.conf" <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin ${FIRST_USER_NAME} --noclear %I \$TERM
+EOF
+
+install -d -m 0755 "${ROOTFS_DIR}/etc/systemd/system/serial-getty@.service.d"
+cat > "${ROOTFS_DIR}/etc/systemd/system/serial-getty@.service.d/autologin.conf" <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin ${FIRST_USER_NAME} --keep-baud 115200,38400,9600 %I \$TERM
+EOF
+
+cat > "${ROOTFS_DIR}/home/${FIRST_USER_NAME}/.bash_profile" <<'EOFBASH'
+# TRS-AI: MBASIC on HDMI / virtual console (tty1) and common serial / virtio consoles.
+case "$(tty)" in
+    /dev/tty[0-9]*|/dev/ttyS*|/dev/ttyAMA*|/dev/hvc[0-9]*)
+        exec /usr/local/bin/trs-ai-basic
+        ;;
+esac
+EOFBASH
+chmod 0644 "${ROOTFS_DIR}/home/${FIRST_USER_NAME}/.bash_profile"
+chown 1000:1000 "${ROOTFS_DIR}/home/${FIRST_USER_NAME}/.bash_profile" 2>/dev/null || true
+
+cat > "${ROOTFS_DIR}/usr/lib/tmpfiles.d/trs-ai-appliance.conf" <<EOF
+d /home/${FIRST_USER_NAME}/.mbasic 0755 ${FIRST_USER_NAME} ${FIRST_USER_NAME} -
+EOF
+
+if [[ -f "${ROOTFS_DIR}/usr/lib/os-release" ]]; then
+	sed -i \
+		-e 's/^NAME=.*/NAME="TRS-AI (Raspberry Pi OS Lite)"/' \
+		-e 's/^PRETTY_NAME=.*/PRETTY_NAME="TRS-AI Raspberry Pi OS Lite"/' \
+		"${ROOTFS_DIR}/usr/lib/os-release" || true
+fi
+
+# Quiet login: no dynamic IP line on getty, no Debian warranty MOTD wall, no Wi-Fi/rfkill nag (revisit Wi‑Fi from TRS-AI menu later).
+if [[ -d "${ROOTFS_DIR}/etc/issue.d" ]]; then
+	rm -f "${ROOTFS_DIR}"/etc/issue.d/*
+fi
+:>"${ROOTFS_DIR}/etc/motd"
+if [[ -d "${ROOTFS_DIR}/etc/update-motd.d" ]]; then
+	rm -f "${ROOTFS_DIR}"/etc/update-motd.d/*
+fi
+if [[ -f "${ROOTFS_DIR}/etc/default/motd-news" ]]; then
+	sed -i 's/^ENABLED=.*/ENABLED=0/' "${ROOTFS_DIR}/etc/default/motd-news" || true
+fi
+printf '%s\n' 'TRS-AI' >"${ROOTFS_DIR}/etc/issue"
+printf '%s\n' 'TRS-AI' >"${ROOTFS_DIR}/etc/issue.net"
+shopt -s nullglob
+for f in "${ROOTFS_DIR}/etc/profile.d/"*.sh; do
+	if grep -qiE 'rfkill|wi-fi is currently blocked|wifi is currently blocked|wifi is disabled because|wlan country|wireless.*regulatory|Use raspi-config.*(country|wlan)|set the country before use' "$f" 2>/dev/null; then
+		rm -f "$f"
+	fi
+done
+shopt -u nullglob
+touch "${ROOTFS_DIR}/home/${FIRST_USER_NAME}/.hushlogin"
+chmod 0644 "${ROOTFS_DIR}/home/${FIRST_USER_NAME}/.hushlogin" 2>/dev/null || true
+chown 1000:1000 "${ROOTFS_DIR}/home/${FIRST_USER_NAME}/.hushlogin" 2>/dev/null || true
+
+# Match Fedora mkosi appliance: autologin with no password prompt. pi-gen requires
+# FIRST_USER_PASS when DISABLE_FIRST_BOOT_USER_RENAME=1; clear it here for headless console.
+on_chroot <<EOF
+passwd -d ${FIRST_USER_NAME}
+EOF

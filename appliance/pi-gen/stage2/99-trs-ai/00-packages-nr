@@ -1,0 +1,2 @@
+# Minimal extra packages for TRS-AI preflight (ip route) on Pi OS Lite.
+iproute2

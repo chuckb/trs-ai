@@ -65,7 +65,7 @@ Optional convenience: if you keep a venv in a fixed place, your shell can `sourc
 
 More detail: [Milestone 1 architecture / dependencies](docs/architecture_milestone1_dependencies.md) (host vs guest).
 
-## Building the Milestone 1 image
+## Building the Milestone 1 image (Fedora / QEMU)
 
 On a Fedora-like host with `mkosi`, QEMU, `guestfish`, etc.:
 
@@ -75,6 +75,18 @@ On a Fedora-like host with `mkosi`, QEMU, `guestfish`, etc.:
 ```
 
 The raw disk image is written under `${XDG_CACHE_HOME:-$HOME/.cache}/trs-ai-basic/output/` by default (see script output). Override staging with `TRS_AI_MKOSI_STAGEDIR` if your checkout lives on a filesystem without xattrs.
+
+**`./appliance/scripts/build-image.sh --arch aarch64`** builds a **Fedora AArch64** disk for **QEMU UEFI** (`~/.cache/trs-ai-basic-aarch64/output/`). It is **not** the Raspberry Pi SD card image.
+
+## Raspberry Pi OS (Pi 500 / Pi hardware)
+
+Use **pi-gen** (see [docs/appliance_raspberry_pi_os_plan.md](docs/appliance_raspberry_pi_os_plan.md)):
+
+```bash
+./appliance/scripts/build-pi-os-image.sh
+```
+
+Prefer **Docker** on Fedora; output appears under the cached pi-gen tree’s **`deploy/`** directory. Flash a **`.img`** with `flash-appliance-sd.sh` by passing the image path explicitly.
 
 ## Run and smoke test
 
@@ -90,6 +102,8 @@ For the M2/M3 scripts, set **`TRS_AI_PYTHON`** if you want a specific interprete
 ## Documentation
 
 - [Milestone 1 dependencies and architecture](docs/architecture_milestone1_dependencies.md)
+- [Fedora AArch64 QEMU UEFI only](docs/appliance_aarch64_rpi_uefi_plan.md) (not Pi hardware)
+- [Raspberry Pi OS Lite + TRS-AI](docs/appliance_raspberry_pi_os_plan.md)
 - [Milestone 2: `AILOAD` and AI env](docs/architecture_milestone2_aiload.md)
 - [Milestone 3: AI editing and pending buffer](docs/architecture_milestone3_ai_editing.md)
 - [Appliance concept](docs/trs80_ai_basic_appliance_concept.md)

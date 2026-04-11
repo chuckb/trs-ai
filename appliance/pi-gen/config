@@ -1,0 +1,22 @@
+# Sourced by pi-gen build.sh — Raspberry Pi OS Lite (arm64) + TRS-AI overlay.
+# Copy to pi-gen root as `config` by build-pi-os-image.sh (or use build-docker.sh -c).
+
+IMG_NAME=raspios-trs-ai-lite-arm64
+RELEASE=bookworm
+
+# Headless HDMI: skip first-boot rename wizard (requires a set password).
+DISABLE_FIRST_BOOT_USER_RENAME=1
+# CHANGE before deployment — placeholder for development images only.
+FIRST_USER_PASS=trs-ai-change-me
+
+ENABLE_SSH=0
+
+LOCALE_DEFAULT=en_US.UTF-8
+KEYBOARD_KEYMAP=us
+KEYBOARD_LAYOUT="English (US)"
+TIMEZONE_DEFAULT=UTC
+
+TARGET_HOSTNAME=trs-ai-pi
+
+# zip | none | xz | zst ...
+DEPLOY_COMPRESSION=zip

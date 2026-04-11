@@ -1,0 +1,11 @@
+#!/bin/bash
+export PYTHONUNBUFFERED=1
+set -a
+if [[ -r /etc/trs-ai/ai.env ]]; then
+  # shellcheck source=/dev/null
+  . /etc/trs-ai/ai.env
+fi
+set +a
+/usr/local/libexec/trs-ai-preflight.sh
+cd ~
+exec /usr/bin/python3 /opt/trs-ai/mbasic/mbasic --ui cli
